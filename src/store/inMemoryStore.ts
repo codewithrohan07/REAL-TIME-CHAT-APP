@@ -32,9 +32,14 @@ export class InMemoryStore implements Store {
   }
 
   addChat(userId: UserId, name: string, roomId: string, message: string) {
+
+    if (!this.store.get(roomId)) {
+      this.initRoom(roomId);
+    }
+
     const room = this.store.get(roomId);
     if (!room) {
-      return null;
+      return;
     }
 
     const chat = {
@@ -45,7 +50,6 @@ export class InMemoryStore implements Store {
       upvotes: []
     };
     room.chats.push(chat);
-
     return chat;
   }
 
@@ -55,15 +59,14 @@ export class InMemoryStore implements Store {
       return;
     }
 
-    const chat = room.chats.find(({ id }) => id === chatId);
+    const chat = room.chats.find(({ id }) => id == chatId);
     if (chat) {
+      if (chat.upvotes.find(x => x === userId)) {
+        return chat;
+      }
       chat.upvotes.push(userId);
     }
 
     return chat;
   }
-
-  boardcast(roomId: string, message: string) {
-
-  };
 }

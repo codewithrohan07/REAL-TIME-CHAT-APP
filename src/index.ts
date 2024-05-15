@@ -1,9 +1,9 @@
 import { server as WebSocketServer, connection } from "websocket";
 import http from "http";
-import { IncomingMessage, InitMessageType, SupportedMessage, UpvoteMessageType, UserMessageType } from "./store/messages/incomingMessages";
+import { IncomingMessage, SupportedMessage } from "./messages/incomingMessages";
 import { UserManager } from "./UserManager";
 import { InMemoryStore } from "./store/inMemoryStore";
-import { OutgoingMessage, SupportedMessage as OutgoingSupportedMessages } from "./store/messages/outgoingMessage";
+import { OutgoingMessage, SupportedMessage as OutgoingSupportedMessages } from "./messages/outgoingMessage";
 
 
 const server = http.createServer(function (request: any, response: any) {
@@ -11,13 +11,14 @@ const server = http.createServer(function (request: any, response: any) {
   response.writeHead(404);
   response.end();
 });
-server.listen(8080, function () {
-  console.log((new Date()) + ' Server is listening on port 8080');
-});
 
 const userManager = new UserManager();
 
 const store = new InMemoryStore();
+
+server.listen(8080, function () {
+  console.log((new Date()) + ' Server is listening on port 8080');
+});
 
 
 const wsServer = new WebSocketServer({
@@ -30,6 +31,7 @@ function originIsAllowed(origin: string) {
 }
 
 wsServer.on('request', function (request) {
+
   if (!originIsAllowed(request.origin)) {
     // Make sure we only accept requests from an allowed origin
     request.reject();
@@ -40,32 +42,31 @@ wsServer.on('request', function (request) {
   var connection = request.accept('echo-protocol', request.origin);
   console.log((new Date()) + ' Connection accepted.');
   connection.on('message', function (message) {
+    console.log(message);
     //todo add rate limiting logic 
     if (message.type === 'utf8') {
       try {
+        console.log("indie with message" + message.utf8Data);
         messageHandler(connection, JSON.parse(message.utf8Data));
       } catch (e) {
 
       }
     }
   });
-
-  connection.on('close', function (reasonCode, description) {
-    console.log((new Date()) + ' Peer ' + connection.remoteAddress + ' disconnected.');
-  });
 });
 
 function messageHandler(ws: connection, message: IncomingMessage) {
   if (message.type == SupportedMessage.JoinRoom) {
     const payload = message.payload;
-    userManager.addUser(payload.name, payload.roomId, payload.userId, ws);
+    userManager.addUser(payload.name, payload.userId, payload.roomId, ws);
   }
 
-  if (message.type == SupportedMessage.SendMessage) {
+  if (message.type === SupportedMessage.SendMessage) {
     const payload = message.payload;
-    const user = userManager.getUser(payload.userId, payload.roomId);
+    const user = userManager.getUser(payload.roomId, payload.userId);
+
     if (!user) {
-      console.error("User not found in database");
+      console.error("User not found in the db");
       return;
     }
 
@@ -81,19 +82,21 @@ function messageHandler(ws: connection, message: IncomingMessage) {
         roomId: payload.roomId,
         message: payload.message,
         name: user.name,
-        upvotes: 0
+        upvotes: 0,
       }
     };
-
-    userManager.boardcast(payload.roomId, payload.userId, outgoingPayload);
+    userManager.broadcast(payload.roomId, payload.userId, outgoingPayload);
   }
 
-  if (message.type == SupportedMessage.UpvoteMessage) {
+
+  if (message.type === SupportedMessage.UpvoteMessage) {
     const payload = message.payload;
     const chat = store.upvote(payload.userId, payload.roomId, payload.chatId);
+    console.log("inside upvote");
     if (!chat) {
       return;
     }
+    console.log("inside upvote 2");
 
     const outgoingPayload: OutgoingMessage = {
       type: OutgoingSupportedMessages.UpdateChat,
@@ -104,6 +107,7 @@ function messageHandler(ws: connection, message: IncomingMessage) {
       }
     };
 
-    userManager.boardcast(payload.roomId, payload.userId, outgoingPayload);
+    console.log("inside upvote 3");
+    userManager.broadcast(payload.roomId, payload.userId, outgoingPayload);
   }
 }

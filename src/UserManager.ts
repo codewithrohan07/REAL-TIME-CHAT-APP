@@ -1,5 +1,5 @@
 import { connection } from "websocket";
-import { OutgoingMessage } from "./store/messages/outgoingMessage";
+import { OutgoingMessage } from "./messages/outgoingMessage";
 
 interface User {
   name: string,
@@ -33,9 +33,14 @@ export class UserManager {
       conn: socket
     }
     );
+
+    socket.on('close', (reasonCode, description) => {
+      this.removeUser(roomId, userId);
+    });
   }
 
   removeUser(roomId: string, userId: string) {
+    console.log("Removed User");
     const users = this.rooms.get(roomId)?.users;
     if (users) {
       users.filter(({ id }) => id !== userId);
@@ -48,7 +53,7 @@ export class UserManager {
     return user ?? null;
   }
 
-  boardcast(roomId: string, userId: string, message: OutgoingMessage) {
+  broadcast(roomId: string, userId: string, message: OutgoingMessage) {
     const user = this.getUser(roomId, userId);
 
     if (!user) {
@@ -59,11 +64,13 @@ export class UserManager {
     const room = this.rooms.get(roomId);
 
     if (!room) {
-      console.error("Room not found");
+      console.error("Rom rom not found");
       return;
     }
 
-    room.users.forEach(({ conn }) => {
+    room.users.forEach(({ conn, id }) => {
+
+      console.log("outgoing message " + JSON.stringify(message));
       conn.sendUTF(JSON.stringify(message));
     });
   }
